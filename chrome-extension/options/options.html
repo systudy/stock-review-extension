@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>A股每日复盘提醒 - 设置</title>
+    <link rel="stylesheet" href="options.css">
+  </head>
+  <body>
+    <main class="settings-shell">
+      <section class="panel">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">全局设置</p>
+            <h1>提醒与样式</h1>
+          </div>
+          <button id="saveSettingsBtn" class="solid-btn">保存设置</button>
+        </div>
+        <form id="settingsForm" class="settings-grid">
+          <label>
+            <span>复盘提醒时间</span>
+            <input name="reviewReminderTime" type="time">
+          </label>
+          <label>
+            <span>盘中轮询间隔（分钟，仅刷新行情缓存）</span>
+            <input name="refreshIntervalMinutes" type="number" min="1" max="60">
+          </label>
+          <label>
+            <span>透明度</span>
+            <input name="opacity" type="range" min="0.55" max="1" step="0.01">
+          </label>
+          <label>
+            <span>主题</span>
+            <select name="theme">
+              <option value="scarlet">经典红绿</option>
+              <option value="graphite">石墨办公</option>
+              <option value="mist">淡雾隐蔽</option>
+            </select>
+          </label>
+          <label class="check-row"><input name="reviewOnlyTradingDays" type="checkbox">仅交易日提醒</label>
+          <label class="check-row"><input name="compactMode" type="checkbox">紧凑显示模式</label>
+          <label class="check-row"><input name="hidePriceOnBlur" type="checkbox">失焦隐藏价格</label>
+        </form>
+        <div class="tip-box">
+          <strong>交易日过滤说明</strong>
+          <p>默认自动跳过周末；工作日会结合上证指数最新日线判断是否休市。若遇到特殊节假日，可在下方手动维护例外。</p>
+        </div>
+        <div class="tip-box">
+          <strong>推荐使用方式</strong>
+          <p>当前版本更适合收盘后复盘与打分。插件会低频刷新缓存，重点保证 15:30 后生成稳定的复盘报告，而不是追求券商终端级逐笔实时。</p>
+        </div>
+        <form id="holidayForm" class="holiday-form">
+          <input name="holidayValue" placeholder="输入 YYYY-MM-DD，前面加 ! 表示强制休市">
+          <button class="ghost-btn" type="submit">新增例外</button>
+        </form>
+        <div id="holidayList" class="chip-list"></div>
+      </section>
+
+      <section class="panel">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">预警模块</p>
+            <h2>自定义条件预警</h2>
+          </div>
+        </div>
+        <form id="alertRuleForm" class="rule-form"></form>
+        <div id="alertRulesList" class="rule-list"></div>
+      </section>
+
+      <section class="panel">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">复盘打分</p>
+            <h2>自定义打分规则</h2>
+          </div>
+        </div>
+        <form id="scoreRuleForm" class="rule-form"></form>
+        <div id="scoreRulesList" class="rule-list"></div>
+      </section>
+    </main>
+    <script type="module" src="options.js"></script>
+  </body>
+</html>

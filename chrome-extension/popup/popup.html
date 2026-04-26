@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>A股每日复盘提醒</title>
+    <link rel="stylesheet" href="popup.css">
+  </head>
+  <body>
+    <main class="popup-shell">
+      <header class="topbar">
+        <div class="title-wrap">
+          <h1>收盘复盘助手</h1>
+          <p id="headerStatus" class="header-status">复盘未生成 · 自动 15:10 / 16:15</p>
+        </div>
+        <div class="topbar-actions">
+          <button id="openDashboardBtn" class="ghost-btn">完整面板</button>
+          <button id="refreshBtn" class="solid-btn">刷新复盘</button>
+          <button id="openOptionsBtn" class="ghost-btn">规则设置</button>
+        </div>
+      </header>
+
+      <section class="panel watch-panel">
+        <div class="section-head">
+          <h2>自选股</h2>
+          <div class="watch-actions">
+            <span id="watchCount" class="tiny-meta"></span>
+            <button id="openSearchBtn" class="ghost-btn">添加股票</button>
+          </div>
+        </div>
+        <div id="watchlistCards" class="watchlist-cards"></div>
+      </section>
+
+      <section class="panel detail-panel">
+        <div class="detail-head">
+          <div>
+            <h2 id="selectedTitle">请选择一只股票</h2>
+            <p id="selectedMeta" class="tiny-meta">K线、评分和规则命中会在这里一起显示</p>
+          </div>
+          <div id="selectedScore" class="score-pill">-- 分</div>
+        </div>
+
+        <div id="metricGrid" class="metric-grid"></div>
+
+        <div class="chart-card">
+          <canvas id="detailCanvas" width="440" height="220"></canvas>
+        </div>
+
+        <div class="detail-bottom">
+          <article class="detail-list-card">
+            <div class="section-head">
+              <h3>加分项</h3>
+              <span class="tiny-meta">命中规则</span>
+            </div>
+            <div id="matchedRules" class="rule-items"></div>
+          </article>
+
+          <article class="detail-list-card">
+            <div class="section-head">
+              <h3>减分项</h3>
+              <span class="tiny-meta">未命中规则</span>
+            </div>
+            <div id="missedRules" class="rule-items"></div>
+          </article>
+        </div>
+      </section>
+    </main>
+
+    <div id="searchModal" class="modal-backdrop hidden">
+      <section class="modal-card">
+        <div class="section-head">
+          <div>
+            <h2>添加自选股</h2>
+            <p class="tiny-meta">输入代码、名称或拼音简写，例如 600519 / 腾讯 / rjgf</p>
+          </div>
+          <button id="closeSearchBtn" class="ghost-btn">关闭</button>
+        </div>
+
+        <form id="watchForm" class="watch-form">
+          <input id="watchCodeInput" name="code" type="text" maxlength="20" placeholder="代码、名称或拼音简写" autocomplete="off" required>
+          <input id="watchNameInput" name="name" type="text" maxlength="20" placeholder="名称可留空，优先从搜索结果选择" autocomplete="off">
+          <button type="submit" class="solid-btn">添加</button>
+        </form>
+
+        <div id="searchResults" class="search-results"></div>
+      </section>
+    </div>
+
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>
