@@ -37,16 +37,18 @@ function esc(str) {
     .replace(/"/g, "&quot;");
 }
 
-document.getElementById("refreshBtn").addEventListener("click", async () => {
-  const refreshRes = await chrome.runtime.sendMessage({ type: "force-refresh" });
-  if (!refreshRes?.ok) {
-    console.warn("[popup] force-refresh failed:", refreshRes?.error);
+document.getElementById("refreshBtn").addEventListener("click", async (e) => {
+  const btn = e.currentTarget;
+  btn.classList.add("loading");
+  try {
+    const refreshRes = await chrome.runtime.sendMessage({ type: "force-refresh" });
+    if (!refreshRes?.ok) console.warn("[popup] force-refresh failed:", refreshRes?.error);
+    const reviewRes = await chrome.runtime.sendMessage({ type: "run-review" });
+    if (!reviewRes?.ok) console.warn("[popup] run-review failed:", reviewRes?.error);
+    await render();
+  } finally {
+    btn.classList.remove("loading");
   }
-  const reviewRes = await chrome.runtime.sendMessage({ type: "run-review" });
-  if (!reviewRes?.ok) {
-    console.warn("[popup] run-review failed:", reviewRes?.error);
-  }
-  await render();
 });
 
 document.getElementById("openDashboardBtn").addEventListener("click", async () => {
@@ -82,8 +84,19 @@ watchlistCards.addEventListener("click", async (event) => {
   }
   const card = event.target.closest(".stock-card");
   if (card) {
-    _state.selectedCode = card.dataset.code;
-    await render();
+    const clickedCode = card.dataset.code;
+    const detailPanel = document.querySelector(".detail-panel");
+    if (_state.selectedCode === clickedCode && !detailPanel.classList.contains("collapsed")) {
+      // 再次点击同一只 → 收起
+      detailPanel.classList.add("collapsed");
+      document.body.classList.remove("detail-open");
+    } else {
+      _state.selectedCode = clickedCode;
+      detailPanel.classList.remove("collapsed");
+      document.body.classList.add("detail-open");
+      await render();
+    }
+    return;
   }
 });
 
@@ -187,27 +200,18 @@ function renderWatchItem(stock, state, latestReport) {
   const changePct = hasQuote ? Number(quote.changePct || 0) : 0;
   const marketLabel = stock.market === "hk" ? "港股" : stock.market === "bj" ? "北交所" : "A股";
   const positive = changePct >= 0;
+  const chgText = `${positive ? "+" : ""}${changePct.toFixed(2)}%`;
 
   return `
     <article class="stock-card ${activeClass}" data-code="${esc(stock.code)}" data-symbol="${esc(symbol)}">
-      <div class="stock-head">
-        <div>
-          <div class="stock-name">${esc(stock.name)}</div>
-          <div class="stock-code">${esc(stock.market.toUpperCase())} ${esc(stock.code)}</div>
-        </div>
-        <div class="stock-head-right">
-          <div class="stock-score ${scoreClass}">
-            <span class="num">${esc(scoreValue)}</span>分
-          </div>
-          <button class="delete-btn" type="button" data-delete="${esc(stock.market)}:${esc(stock.code)}" title="删除自选股">×</button>
-        </div>
+      <div class="stock-card-top">
+        <div class="stock-name">${esc(stock.name)}</div>
+        <button class="delete-btn" type="button" data-delete="${esc(stock.market)}:${esc(stock.code)}" title="删除">×</button>
       </div>
-      <div class="stock-mid">
-        <div class="stock-price">${esc(price)}</div>
-        <span class="badge ${positive ? "up" : "down"}">${positive ? "+" : ""}${changePct.toFixed(2)}%</span>
-      </div>
-      <div class="stock-tail">
-        <span class="stock-foot">${marketLabel}</span>
+      <div class="stock-card-bottom">
+        <span class="stock-price">${esc(price)}</span>
+        <span class="stock-chg ${positive ? "up" : "down"}">${esc(chgText)}</span>
+        <span class="stock-score-badge ${scoreClass}">${esc(String(scoreValue))}</span>
       </div>
     </article>
   `;
@@ -218,7 +222,7 @@ function renderSelectedDetail(state, latestReport) {
   if (!selectedStock) {
     selectedTitle.textContent = "请先添加自选股";
     selectedMeta.textContent = "当前还没有可复盘的股票";
-    selectedScore.textContent = "-- 分";
+    selectedScore.textContent = "--";
     selectedScore.className = "score-pill";
     metricGrid.innerHTML = "";
     matchedRules.innerHTML = emptyRuleItem("暂无加分项");
@@ -249,7 +253,7 @@ function renderSelectedDetail(state, latestReport) {
       : " · 港股免费网页行情可能存在延时";
   }
 
-  selectedScore.textContent = `${reportItem?.totalScore ?? "--"} 分`;
+  selectedScore.textContent = `${reportItem?.totalScore ?? "--"}`;
   selectedScore.className = `score-pill ${(reportItem?.totalScore ?? 0) >= Math.max(totalPossibleScore * 0.6, 1) ? "up" : "down"}`;
 
   metricGrid.innerHTML = `
@@ -268,7 +272,7 @@ function renderSelectedDetail(state, latestReport) {
     ? reportItem.missed.map((item) => ruleCard(item.ruleName, item.detail, false, item.points)).join("")
     : emptyRuleItem("暂无未命中项");
 
-  drawCandles(detailCanvas, history);
+  requestAnimationFrame(() => drawCandles(detailCanvas, history));
 }
 
 function metricCard(label, value, color = "var(--text-main)") {

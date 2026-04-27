@@ -13,57 +13,63 @@
           <h1>收盘复盘助手</h1>
           <p id="headerStatus" class="header-status">复盘未生成 · 自动 15:10 / 16:15</p>
         </div>
-        <div class="topbar-actions">
-          <button id="openDashboardBtn" class="ghost-btn">完整面板</button>
-          <button id="refreshBtn" class="solid-btn">刷新复盘</button>
-          <button id="openOptionsBtn" class="ghost-btn">规则设置</button>
-        </div>
       </header>
 
-      <section class="panel watch-panel">
-        <div class="section-head">
-          <h2>自选股</h2>
-          <div class="watch-actions">
-            <span id="watchCount" class="tiny-meta"></span>
-            <button id="openSearchBtn" class="ghost-btn">添加股票</button>
-          </div>
-        </div>
-        <div id="watchlistCards" class="watchlist-cards"></div>
-      </section>
-
-      <section class="panel detail-panel">
-        <div class="detail-head">
-          <div>
-            <h2 id="selectedTitle">请选择一只股票</h2>
-            <p id="selectedMeta" class="tiny-meta">K线、评分和规则命中会在这里一起显示</p>
-          </div>
-          <div id="selectedScore" class="score-pill">-- 分</div>
-        </div>
-
-        <div id="metricGrid" class="metric-grid"></div>
-
-        <div class="chart-card">
-          <canvas id="detailCanvas" width="720" height="340"></canvas>
-        </div>
-
-        <div class="detail-bottom">
-          <article class="detail-list-card">
-            <div class="section-head">
-              <h3>加分项</h3>
-              <span class="tiny-meta">命中规则</span>
+      <div class="body-columns">
+        <aside class="sidebar-panel">
+          <div class="sidebar-head">
+            <h2>自选股 <span id="watchCount" class="tiny-meta"></span></h2>
+            <div class="watch-actions">
+              <button id="refreshBtn" class="ghost-btn icon-btn" title="刷新复盘">↻</button>
+              <button id="openOptionsBtn" class="ghost-btn icon-btn" title="规则设置">⚙</button>
+              <button id="openDashboardBtn" class="ghost-btn icon-btn" title="完整面板">▣</button>
+              <button id="openSearchBtn" class="solid-btn icon-btn" title="添加股票">＋</button>
             </div>
-            <div id="matchedRules" class="rule-items"></div>
-          </article>
+          </div>
+          <div id="watchlistCards" class="watchlist-cards"></div>
+        </aside>
 
-          <article class="detail-list-card">
-            <div class="section-head">
-              <h3>减分项</h3>
-              <span class="tiny-meta">未命中规则</span>
+        <section class="detail-panel collapsed">
+          <div class="detail-inner">
+            <div class="detail-head">
+              <div>
+                <div id="selectedTitle" class="detail-title">请选择一只股票</div>
+                <p id="selectedMeta" class="detail-meta">点击左侧股票查看 K 线与评分详情</p>
+              </div>
+              <div id="selectedScore" class="score-pill">--</div>
             </div>
-            <div id="missedRules" class="rule-items"></div>
-          </article>
-        </div>
-      </section>
+          </div>
+
+          <div class="chart-card">
+            <canvas id="detailCanvas" width="600" height="260"></canvas>
+          </div>
+
+          <div class="detail-inner">
+            <div id="metricGrid" class="metric-grid"></div>
+
+            <details class="rules-collapse">
+              <summary>规则详情</summary>
+              <div class="detail-bottom">
+                <article class="detail-list-card">
+                  <div class="section-head">
+                    <h3>加分项</h3>
+                    <span class="tiny-meta">命中规则</span>
+                  </div>
+                  <div id="matchedRules" class="rule-items"></div>
+                </article>
+
+                <article class="detail-list-card">
+                  <div class="section-head">
+                    <h3>减分项</h3>
+                    <span class="tiny-meta">未命中规则</span>
+                  </div>
+                  <div id="missedRules" class="rule-items"></div>
+                </article>
+              </div>
+            </details>
+          </div>
+        </section>
+      </div>
     </main>
 
     <div id="searchModal" class="modal-backdrop hidden">
