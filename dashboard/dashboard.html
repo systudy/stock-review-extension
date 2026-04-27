@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>A股每日复盘提醒 - 控制台</title>
+    <link rel="stylesheet" href="dashboard.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar panel">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">自选股管理</p>
+            <h1>盯盘列表</h1>
+          </div>
+          <button id="refreshBtn" class="solid-btn">刷新</button>
+        </div>
+
+        <form id="watchForm" class="stack-form">
+          <input name="code" placeholder="股票代码 / ETF代码" maxlength="6" required>
+          <input name="name" placeholder="名称">
+          <div class="inline-grid">
+            <input name="costPrice" type="number" step="0.01" placeholder="成本价">
+            <input name="positionQty" type="number" step="1" placeholder="持仓数量">
+          </div>
+          <div class="inline-grid">
+            <input name="takeProfitPrice" type="number" step="0.01" placeholder="止盈价">
+            <input name="stopLossPrice" type="number" step="0.01" placeholder="止损价">
+          </div>
+          <textarea name="note" rows="2" placeholder="备注"></textarea>
+          <button type="submit" class="solid-btn">添加/覆盖自选股</button>
+        </form>
+
+        <div id="watchTable" class="watch-table"></div>
+
+        <button id="importBtn" class="ghost-btn" style="width:100%">批量导入自选股</button>
+      </aside>
+
+      <div id="importModal" class="modal-overlay hidden">
+        <div class="modal-box">
+          <div class="section-head" style="margin-bottom:12px">
+            <h3 style="margin:0">批量导入自选股</h3>
+            <button id="importCloseBtn" class="ghost-btn">✕</button>
+          </div>
+          <p class="muted" style="margin:0 0 12px;font-size:13px">每行一条，格式：<code>名称 代码</code> 或 <code>代码 名称</code>，港股代码如 <code>00981</code> 或 <code>00981.HK</code></p>
+          <textarea id="importTextarea" rows="12" placeholder="例：&#10;比亚迪 002594&#10;中芯国际 00981.HK&#10;海光信息 688041" style="font-size:13px;font-family:monospace"></textarea>
+          <div style="display:flex;gap:8px;margin-top:12px;justify-content:flex-end">
+            <button id="importCancelBtn" class="ghost-btn">取消</button>
+            <button id="importConfirmBtn" class="solid-btn">导入</button>
+          </div>
+          <div id="importResult" class="muted" style="margin-top:10px;font-size:13px;min-height:18px"></div>
+        </div>
+      </div>
+
+      <main class="main-board">
+        <section class="hero panel">
+          <div class="hero-top">
+            <div>
+              <p class="eyebrow">轻量隐蔽盯盘</p>
+              <h2 id="selectedTitle">请选择一只股票</h2>
+              <p id="liveStatus" class="muted">未连接实时行情</p>
+            </div>
+            <div class="hero-actions">
+              <button id="reviewBtn" class="ghost-btn">生成复盘</button>
+              <button id="exportMdBtn" class="ghost-btn">导出 Markdown</button>
+              <button id="exportHtmlBtn" class="ghost-btn">导出 HTML</button>
+              <button id="optionsBtn" class="ghost-btn">规则设置</button>
+            </div>
+          </div>
+          <div id="quoteSummary" class="summary-strip"></div>
+          <div class="chart-tabs">
+            <button id="showIntradayBtn" class="ghost-btn active-tab">分时</button>
+            <button id="showDailyBtn" class="ghost-btn">日K</button>
+          </div>
+          <canvas id="klineCanvas" width="900" height="360"></canvas>
+        </section>
+
+        <section class="grid-panels">
+          <article class="panel">
+            <div class="section-head">
+              <h3>复盘打分排行</h3>
+              <span class="muted" id="reportTimestamp">未生成</span>
+            </div>
+            <div id="reportOverview" class="report-overview muted"></div>
+            <div id="reportRanking" class="list-block"></div>
+          </article>
+
+          <article class="panel">
+            <div class="section-head">
+              <h3>预警记录</h3>
+              <span class="muted">最近 100 条</span>
+            </div>
+            <div id="alertLogs" class="list-block"></div>
+          </article>
+        </section>
+      </main>
+    </div>
+    <script type="module" src="dashboard.js"></script>
+  </body>
+</html>
