@@ -180,11 +180,13 @@ export function evaluateRule(rule, snapshot) {
         matched: (takeProfit > 0 && currentPrice >= takeProfit) || (stopLoss > 0 && currentPrice <= stopLoss),
         detail: `现价 ${currentPrice} / 止盈 ${takeProfit || "--"} / 止损 ${stopLoss || "--"}`
       };
-    case "close_above_open":
+    case "close_above_open": {
+      const prevClose = snapshot.prevCandle?.close || 0;
       return {
-        matched: currentPrice > currentOpen,
-        detail: `现价 ${currentPrice} / 开盘 ${currentOpen}`
+        matched: currentChangePct > 0,
+        detail: `现价 ${currentPrice} / 昨收 ${prevClose}`
       };
+    }
     case "volume_up_vs_prev":
       return {
         matched: snapshot.currentVolume > snapshot.prevVolume,
@@ -225,9 +227,10 @@ export function evaluateRule(rule, snapshot) {
 
 export function evaluateAlerts(alertRules, snapshots) {
   const hits = [];
+  const enabledRules = alertRules.filter((item) => item.enabled);
 
   for (const snapshot of snapshots) {
-    for (const rule of alertRules.filter((item) => item.enabled)) {
+    for (const rule of enabledRules) {
       const result = evaluateRule(rule, snapshot);
       if (result.matched) {
         hits.push({
@@ -249,12 +252,13 @@ export function evaluateAlerts(alertRules, snapshots) {
 }
 
 export function evaluateScores(scoreRules, snapshots) {
+  const enabledRules = scoreRules.filter((rule) => rule.enabled);
   return snapshots.map((snapshot) => {
     const matched = [];
     const missed = [];
     let totalScore = 0;
 
-    scoreRules.filter((rule) => rule.enabled).forEach((rule) => {
+    enabledRules.forEach((rule) => {
       const result = evaluateRule(rule, snapshot);
       const item = {
         ruleId: rule.id,

@@ -1,8 +1,8 @@
 import { drawCandles } from "../shared/chart.js";
 import { fetchSinaSuggestions, fetchStockUniverse } from "../shared/market-api.js";
 import { ensureDefaults, getState, saveWatchlist } from "../shared/storage.js";
-import { applyTheme } from "../shared/ui.js";
-import { formatStockCode, inferMarket } from "../shared/utils.js";
+import { applyTheme, renderBadge } from "../shared/ui.js";
+import { formatStockCode, inferMarket, escapeHtml, debounce } from "../shared/utils.js";
 
 const watchlistCards = document.getElementById("watchlistCards");
 const watchCount = document.getElementById("watchCount");
@@ -21,34 +21,54 @@ const matchedRules = document.getElementById("matchedRules");
 const missedRules = document.getElementById("missedRules");
 const detailCanvas = document.getElementById("detailCanvas");
 const headerStatus = document.getElementById("headerStatus");
+const detailPanel = document.querySelector(".detail-panel");
 
-const _state = {
-  bootstrappedRefresh: false,
-  selectedCode: null,
-  stockUniverse: [],
-  selectedSuggestion: null,
-};
-
-function esc(str) {
-  return String(str ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+function showDetailPanel() {
+  detailPanel.classList.add("visible");
 }
 
-document.getElementById("refreshBtn").addEventListener("click", async (e) => {
-  const btn = e.currentTarget;
-  btn.classList.add("loading");
-  try {
-    const refreshRes = await chrome.runtime.sendMessage({ type: "force-refresh" });
-    if (!refreshRes?.ok) console.warn("[popup] force-refresh failed:", refreshRes?.error);
-    const reviewRes = await chrome.runtime.sendMessage({ type: "run-review" });
-    if (!reviewRes?.ok) console.warn("[popup] run-review failed:", reviewRes?.error);
-    await render();
-  } finally {
-    btn.classList.remove("loading");
+function hideDetailPanel() {
+  detailPanel.classList.remove("visible");
+}
+
+let bootstrappedRefresh = false;
+let selectedCode = null;
+let stockUniverse = [];
+let selectedSuggestion = null;
+
+// 排序模式：'default' | 'score' | 'change'
+const SORT_MODES = ["default", "score", "change"];
+const SORT_LABELS = { default: "默认", score: "得分", change: "涨跌" };
+let sortMode = "default";
+
+document.getElementById("sortBtn").addEventListener("click", () => {
+  const idx = (SORT_MODES.indexOf(sortMode) + 1) % SORT_MODES.length;
+  sortMode = SORT_MODES[idx];
+  const btn = document.getElementById("sortBtn");
+  btn.textContent = SORT_LABELS[sortMode];
+  btn.classList.toggle("active", sortMode !== "default");
+  render();
+});
+
+document.getElementById("detailDragBar").addEventListener("click", () => {
+  selectedCode = null;
+  hideDetailPanel();
+});
+
+document.getElementById("refreshBtn").addEventListener("click", async () => {
+  const btn = document.getElementById("refreshBtn");
+  btn.classList.add("spinning");
+  // force-refresh 已包含行情拉取，run-review 直接复用缓存，避免重复请求。
+  const refreshRes = await chrome.runtime.sendMessage({ type: "force-refresh" });
+  if (!refreshRes?.ok) {
+    console.warn("[popup] force-refresh failed:", refreshRes?.error);
   }
+  const reviewRes = await chrome.runtime.sendMessage({ type: "run-review-cached" });
+  if (!reviewRes?.ok) {
+    console.warn("[popup] run-review-cached failed:", reviewRes?.error);
+  }
+  await render();
+  btn.classList.remove("spinning");
 });
 
 document.getElementById("openDashboardBtn").addEventListener("click", async () => {
@@ -64,57 +84,20 @@ openSearchBtn.addEventListener("click", async () => {
   openSearchModal();
 });
 
-watchlistCards.addEventListener("click", async (event) => {
-  const deleteBtn = event.target.closest("[data-delete]");
-  if (deleteBtn) {
-    event.stopPropagation();
-    const st = await getState();
-    const [market, code] = deleteBtn.dataset.delete.split(":");
-    const target = st.watchlist.find((item) => item.market === market && item.code === code);
-    if (!confirm(`确认删除「${target?.name || code}」？`)) return;
-    const nextWatchlist = st.watchlist.filter((item) => !(item.market === market && item.code === code));
-    await saveWatchlist(nextWatchlist);
-    if (_state.selectedCode === code) {
-      _state.selectedCode = nextWatchlist[0]?.code || null;
-    }
-    await chrome.runtime.sendMessage({ type: "force-refresh" });
-    await chrome.runtime.sendMessage({ type: "run-review" });
-    await render();
-    return;
-  }
-  const card = event.target.closest(".stock-card");
-  if (card) {
-    const clickedCode = card.dataset.code;
-    const detailPanel = document.querySelector(".detail-panel");
-    if (_state.selectedCode === clickedCode && !detailPanel.classList.contains("collapsed")) {
-      // 再次点击同一只 → 收起
-      detailPanel.classList.add("collapsed");
-      document.body.classList.remove("detail-open");
-    } else {
-      _state.selectedCode = clickedCode;
-      detailPanel.classList.remove("collapsed");
-      document.body.classList.add("detail-open");
-      await render();
-    }
-    return;
-  }
-});
-
-searchResults.addEventListener("click", (event) => {
-  const item = event.target.closest(".search-item");
-  if (!item) return;
-  _state.selectedSuggestion = {
-    code: item.dataset.code,
-    market: item.dataset.market,
-    name: item.dataset.name,
-  };
-  watchCodeInput.value = _state.selectedSuggestion.code;
-  watchNameInput.value = _state.selectedSuggestion.name;
-  renderSearchResults([]);
-});
-
 closeSearchBtn.addEventListener("click", () => {
   closeSearchModal();
+});
+
+document.getElementById("closeDetailBtn").addEventListener("click", () => {
+  selectedCode = null;
+  hideDetailPanel();
+});
+
+detailPanel.addEventListener("click", (event) => {
+  if (event.target === detailPanel) {
+    selectedCode = null;
+    hideDetailPanel();
+  }
 });
 
 searchModal.addEventListener("click", (event) => {
@@ -125,64 +108,100 @@ searchModal.addEventListener("click", (event) => {
 
 watchForm.addEventListener("submit", async (event) => {
   event.preventDefault();
-  const st = await getState();
-  const suggestion = _state.selectedSuggestion || findExactSuggestion(watchCodeInput.value.trim(), watchNameInput.value.trim());
+  const state = await getState();
+  const suggestion = selectedSuggestion || findExactSuggestion(watchCodeInput.value.trim(), watchNameInput.value.trim());
   if (!suggestion) {
     watchCodeInput.focus();
     return;
   }
 
   const { code, market, name } = suggestion;
-  const existing = st.watchlist.find((item) => item.code === code && item.market === market);
+  const existing = state.watchlist.find((item) => item.code === code && item.market === market);
   const nextItem = existing
     ? { ...existing, name }
-    : { code, market, name };
+    : {
+        code,
+        market,
+        name
+      };
 
-  const nextWatchlist = [nextItem, ...st.watchlist.filter((item) => !(item.code === code && item.market === market))];
+  const nextWatchlist = [nextItem, ...state.watchlist.filter((item) => !(item.code === code && item.market === market))];
   await saveWatchlist(nextWatchlist);
-  _state.selectedCode = code;
+  selectedCode = code;
+  showDetailPanel();
   closeSearchModal();
 
   await chrome.runtime.sendMessage({ type: "force-refresh" });
-  await chrome.runtime.sendMessage({ type: "run-review" });
+  await chrome.runtime.sendMessage({ type: "run-review-cached" });
   await render();
 });
 
 watchCodeInput.addEventListener("input", handleSearchInput);
 watchNameInput.addEventListener("input", handleSearchInput);
 
+const debouncedRender = debounce(render, 120);
+
 chrome.storage.onChanged.addListener(() => {
-  render();
+  debouncedRender();
 });
 
 render();
 
 async function render() {
-  await ensureDefaults();
   const state = await getState();
   applyTheme(state.settings);
 
-  if (!_state.bootstrappedRefresh) {
-    _state.bootstrappedRefresh = true;
-    _state.stockUniverse = await loadStockUniverse();
+  if (!bootstrappedRefresh) {
+    bootstrappedRefresh = true;
+    ensureDefaults().catch(() => {});
+    loadStockUniverse().catch(() => {});
     chrome.runtime
       .sendMessage({ type: "soft-refresh" })
-      .then(() => chrome.runtime.sendMessage({ type: "run-review" }))
+      .then(() => chrome.runtime.sendMessage({ type: "run-review-cached" }))
       .then(() => render())
       .catch(() => {});
-  }
-
-  if (!_state.selectedCode && state.watchlist[0]) {
-    _state.selectedCode = state.watchlist[0].code;
   }
 
   const latestReport = state.reports?.latest || null;
   watchCount.textContent = `${state.watchlist.length} 只`;
   headerStatus.textContent = buildHeaderStatus(state, latestReport);
 
-  watchlistCards.innerHTML = state.watchlist
-    .map((stock) => renderWatchItem(stock, state, latestReport))
-    .join("");
+  const sortedWatchlist = sortWatchlist(state.watchlist, state, latestReport);
+  watchlistCards.innerHTML = sortedWatchlist.length
+    ? sortedWatchlist.map((stock) => renderWatchItem(stock, state, latestReport)).join("")
+    : renderEmptyWatchlist();
+
+  watchlistCards.querySelectorAll(".stock-card").forEach((card) => {
+    card.addEventListener("click", async () => {
+      if (selectedCode === card.dataset.code) {
+        selectedCode = null;
+        hideDetailPanel();
+        await render();
+      } else {
+        selectedCode = card.dataset.code;
+        showDetailPanel();
+        await render();
+      }
+    });
+  });
+
+  watchlistCards.querySelectorAll("[data-delete]").forEach((button) => {
+    button.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      const state = await getState();
+      const [market, code] = button.dataset.delete.split(":");
+      const nextWatchlist = state.watchlist.filter((item) => !(item.market === market && item.code === code));
+      await saveWatchlist(nextWatchlist);
+      if (selectedCode === code) {
+        selectedCode = nextWatchlist[0]?.code || null;
+        if (!selectedCode) {
+          hideDetailPanel();
+        }
+      }
+      await chrome.runtime.sendMessage({ type: "run-review-cached" });
+      await render();
+    });
+  });
 
   renderSelectedDetail(state, latestReport);
 }
@@ -194,35 +213,42 @@ function renderWatchItem(stock, state, latestReport) {
   const totalPossibleScore = latestReport?.totalPossibleScore ?? 0;
   const scoreValue = reportItem?.totalScore ?? "--";
   const scoreClass = Number(scoreValue) >= Math.max(totalPossibleScore * 0.6, 1) ? "up" : "down";
-  const activeClass = _state.selectedCode === stock.code ? "active" : "";
+  const activeClass = selectedCode === stock.code ? "active" : "";
   const hasQuote = Boolean(quote && quote.price > 0);
   const price = hasQuote ? Number(quote.price).toFixed(2) : "—";
   const changePct = hasQuote ? Number(quote.changePct || 0) : 0;
-  const marketLabel = stock.market === "hk" ? "港股" : stock.market === "bj" ? "北交所" : "A股";
-  const positive = changePct >= 0;
-  const chgText = `${positive ? "+" : ""}${changePct.toFixed(2)}%`;
 
   return `
-    <article class="stock-card ${activeClass}" data-code="${esc(stock.code)}" data-symbol="${esc(symbol)}">
-      <div class="stock-card-top">
-        <div class="stock-name">${esc(stock.name)}</div>
-        <button class="delete-btn" type="button" data-delete="${esc(stock.market)}:${esc(stock.code)}" title="删除">×</button>
+    <article class="stock-card ${activeClass}" data-code="${escapeHtml(stock.code)}" data-symbol="${escapeHtml(symbol)}">
+      <div class="stock-head">
+        <div>
+          <div class="stock-name">${escapeHtml(stock.name)}</div>
+          <div class="stock-code">${escapeHtml(stock.market.toUpperCase())} ${escapeHtml(stock.code)}</div>
+        </div>
+        <div class="stock-head-right">
+          <div class="stock-score ${scoreClass}">
+            <span class="num">${escapeHtml(scoreValue)}</span>分
+          </div>
+          <button class="delete-btn" type="button" data-delete="${escapeHtml(stock.market)}:${escapeHtml(stock.code)}" title="删除自选股">×</button>
+        </div>
       </div>
-      <div class="stock-card-bottom">
-        <span class="stock-price">${esc(price)}</span>
-        <span class="stock-chg ${positive ? "up" : "down"}">${esc(chgText)}</span>
-        <span class="stock-score-badge ${scoreClass}">${esc(String(scoreValue))}</span>
+      <div class="stock-mid">
+        <div class="stock-price">${price}</div>
+        ${renderBadge(changePct)}
+      </div>
+      <div class="stock-tail">
+        <span class="stock-foot">${stock.market === "hk" ? "港股" : stock.market === "bj" ? "北交所" : "A股"}</span>
       </div>
     </article>
   `;
 }
 
 function renderSelectedDetail(state, latestReport) {
-  const selectedStock = state.watchlist.find((item) => item.code === _state.selectedCode) || state.watchlist[0];
+  const selectedStock = state.watchlist.find((item) => item.code === selectedCode) ?? null;
   if (!selectedStock) {
     selectedTitle.textContent = "请先添加自选股";
     selectedMeta.textContent = "当前还没有可复盘的股票";
-    selectedScore.textContent = "--";
+    selectedScore.textContent = "-- 分";
     selectedScore.className = "score-pill";
     metricGrid.innerHTML = "";
     matchedRules.innerHTML = emptyRuleItem("暂无加分项");
@@ -253,15 +279,15 @@ function renderSelectedDetail(state, latestReport) {
       : " · 港股免费网页行情可能存在延时";
   }
 
-  selectedScore.textContent = `${reportItem?.totalScore ?? "--"}`;
+  selectedScore.textContent = `${reportItem?.totalScore ?? "--"} 分`;
   selectedScore.className = `score-pill ${(reportItem?.totalScore ?? 0) >= Math.max(totalPossibleScore * 0.6, 1) ? "up" : "down"}`;
 
   metricGrid.innerHTML = `
     ${metricCard("现价", currentPrice.toFixed(2))}
-    ${metricCard("涨跌幅", `${changePct.toFixed(2)}%`, changePct >= 0 ? "var(--accent-up)" : "var(--accent-down)")}
+    ${metricCard("涨跌幅", `${changePct >= 0 ? "+" : ""}${changePct.toFixed(2)}%`, changePct >= 0 ? "var(--accent-up)" : "var(--accent-down)")}
     ${metricCard("MA5", Number(history.at(-1)?.ma5 || 0).toFixed(2))}
     ${metricCard("BBI", Number(history.at(-1)?.bbi || 0).toFixed(2))}
-    ${metricCard("收盘", Number(history.at(-1)?.close || currentPrice).toFixed(2))}
+    ${metricCard("换手率", history.at(-1)?.turnoverRate ? `${Number(history.at(-1).turnoverRate).toFixed(2)}%` : "--")}
   `;
 
   matchedRules.innerHTML = reportItem?.matched?.length
@@ -272,14 +298,14 @@ function renderSelectedDetail(state, latestReport) {
     ? reportItem.missed.map((item) => ruleCard(item.ruleName, item.detail, false, item.points)).join("")
     : emptyRuleItem("暂无未命中项");
 
-  requestAnimationFrame(() => drawCandles(detailCanvas, history));
+  drawCandles(detailCanvas, history);
 }
 
 function metricCard(label, value, color = "var(--text-main)") {
   return `
     <article class="metric-card">
-      <div class="label">${esc(label)}</div>
-      <div class="value" style="color:${esc(color)};">${esc(value)}</div>
+      <div class="label">${label}</div>
+      <div class="value" style="color:${color};">${value}</div>
     </article>
   `;
 }
@@ -287,59 +313,56 @@ function metricCard(label, value, color = "var(--text-main)") {
 function ruleCard(title, detail, positive, points = 0) {
   return `
     <article class="rule-item">
-      <div class="title">${positive ? "+" : "-"}${Number(points || 0)} ${esc(title)}</div>
-      <div class="desc">${esc(detail || "无补充说明")}</div>
+      <div class="title">${positive ? "+" : "-"}${Number(points || 0)} ${escapeHtml(title)}</div>
+      <div class="desc">${escapeHtml(detail || "无补充说明")}</div>
     </article>
   `;
 }
 
 function emptyRuleItem(text) {
-  return `<article class="rule-item"><div class="desc">${esc(text)}</div></article>`;
+  return `<article class="rule-item"><div class="desc">${escapeHtml(text)}</div></article>`;
 }
 
 function buildHeaderStatus(state, latestReport) {
   const updatedAt = state.marketCache?.lastUpdatedAt;
   const source = state.marketCache?.lastRefreshSource;
-  const reviewText = latestReport ? `复盘 ${latestReport.generatedAtText}` : "复盘未生成";
-  const sourceText =
-    source === "manual"
-      ? "手动"
-      : source === "auto-15:10"
-        ? "15:10"
-        : source === "auto-16:15"
-          ? "16:15"
-          : source === "manual-review"
-            ? "复盘"
-            : source === "review-reminder"
-              ? "提醒"
-              : source === "popup-open"
-                ? "打开"
-                : "缓存";
+
+  const sourceLabel =
+    source === "manual" ? "手动刷新"
+    : source === "auto-15:10" ? "15:10 自动"
+    : source === "auto-16:15" ? "16:15 自动"
+    : source === "manual-review" || source === "review-reminder" ? "复盘触发"
+    : source === "popup-open" ? "打开触发"
+    : "缓存";
+
+  const reviewText = latestReport
+    ? `复盘 ${latestReport.generatedAtText}`
+    : "未复盘";
 
   if (!updatedAt) {
-    return `${reviewText} · 自动 15:10 / 16:15`;
+    return `${reviewText} · 15:10 / 16:15 自动`;
   }
 
-  return `${reviewText} · 更新 ${new Date(updatedAt).toLocaleString()} · ${sourceText}`;
+  return `${reviewText} · 行情 ${sourceLabel}`;
 }
 
 async function loadStockUniverse() {
-  if (_state.stockUniverse.length) {
-    return _state.stockUniverse;
+  if (stockUniverse.length) {
+    return stockUniverse;
   }
   try {
-    _state.stockUniverse = await fetchStockUniverse();
+    stockUniverse = await fetchStockUniverse();
   } catch (error) {
     console.error("Failed to load stock universe", error);
-    _state.stockUniverse = [];
+    stockUniverse = [];
   }
-  return _state.stockUniverse;
+  return stockUniverse;
 }
 
 async function handleSearchInput() {
   await loadStockUniverse();
   const keyword = `${watchCodeInput.value} ${watchNameInput.value}`.trim();
-  _state.selectedSuggestion = null;
+  selectedSuggestion = null;
 
   if (!keyword) {
     renderSearchResults([]);
@@ -349,7 +372,7 @@ async function handleSearchInput() {
   const normalized = keyword.replace(/\s+/g, "").toLowerCase();
   const codeKeyword = normalized.replace(/[^0-9]/g, "");
   const remoteSuggestions = await fetchSinaSuggestions(keyword).catch(() => []);
-  const localSuggestions = _state.stockUniverse
+  const localSuggestions = stockUniverse
     .map((item) => ({
       ...item,
       score: getSearchScore(item, normalized, codeKeyword)
@@ -365,36 +388,49 @@ function renderSearchResults(items) {
   searchResults.innerHTML = items
     .map(
       (item) => `
-        <div class="search-item" data-code="${esc(item.code)}" data-market="${esc(item.market)}" data-name="${esc(item.name)}">
+        <div class="search-item" data-code="${escapeHtml(item.code)}" data-market="${escapeHtml(item.market)}" data-name="${escapeHtml(item.name)}">
           <div>
-            <div class="search-name">${esc(item.name)}</div>
-            <div class="search-meta">${esc(item.market.toUpperCase())} ${esc(item.code)}</div>
+            <div class="search-name">${escapeHtml(item.name)}</div>
+            <div class="search-meta">${escapeHtml(item.market.toUpperCase())} ${escapeHtml(item.code)}</div>
           </div>
           <div class="search-meta">点击选择</div>
         </div>
       `
     )
     .join("");
+
+  searchResults.querySelectorAll(".search-item").forEach((node) => {
+    node.addEventListener("click", () => {
+      selectedSuggestion = {
+        code: node.dataset.code,
+        market: node.dataset.market,
+        name: node.dataset.name
+      };
+      watchCodeInput.value = selectedSuggestion.code;
+      watchNameInput.value = selectedSuggestion.name;
+      renderSearchResults([]);
+    });
+  });
 }
 
 function findExactSuggestion(codeInput, nameInput) {
   const code = formatStockCode(codeInput);
   const name = nameInput.trim();
 
-  if (_state.selectedSuggestion) {
-    return _state.selectedSuggestion;
+  if (selectedSuggestion) {
+    return selectedSuggestion;
   }
 
   if (code) {
     return (
-      _state.stockUniverse.find((item) => item.code === code && item.market === inferMarket(code)) ||
-      _state.stockUniverse.find((item) => item.code === code) ||
+      stockUniverse.find((item) => item.code === code && item.market === inferMarket(code)) ||
+      stockUniverse.find((item) => item.code === code) ||
       null
     );
   }
 
   if (name) {
-    return _state.stockUniverse.find((item) => item.name === name) || null;
+    return stockUniverse.find((item) => item.name === name) || null;
   }
 
   return null;
@@ -468,6 +504,37 @@ function openSearchModal() {
 function closeSearchModal() {
   searchModal.classList.add("hidden");
   watchForm.reset();
-  _state.selectedSuggestion = null;
+  selectedSuggestion = null;
   renderSearchResults([]);
+}
+
+function renderEmptyWatchlist() {
+  return `
+    <div class="empty-watchlist">
+      <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/>
+      </svg>
+      <p>还没有自选股</p>
+      <span>点击「添加股票」开始复盘</span>
+    </div>
+  `;
+}
+
+function sortWatchlist(watchlist, state, latestReport) {  if (sortMode === "default") return watchlist;
+
+  return [...watchlist].sort((a, b) => {
+    if (sortMode === "score") {
+      const aScore = latestReport?.ranking?.find((r) => r.code === a.code)?.totalScore ?? -Infinity;
+      const bScore = latestReport?.ranking?.find((r) => r.code === b.code)?.totalScore ?? -Infinity;
+      return bScore - aScore;
+    }
+    if (sortMode === "change") {
+      const aQ = state.marketCache?.quotes?.[`${a.market}${a.code}`];
+      const bQ = state.marketCache?.quotes?.[`${b.market}${b.code}`];
+      const aPct = aQ ? Number(aQ.changePct || 0) : -Infinity;
+      const bPct = bQ ? Number(bQ.changePct || 0) : -Infinity;
+      return bPct - aPct;
+    }
+    return 0;
+  });
 }

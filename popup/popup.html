@@ -8,65 +8,83 @@
   </head>
   <body>
     <main class="popup-shell">
-      <header class="topbar">
-        <div class="title-wrap">
-          <h1>收盘复盘助手</h1>
-          <p id="headerStatus" class="header-status">复盘未生成 · 自动 15:10 / 16:15</p>
-        </div>
-      </header>
-
-      <div class="body-columns">
-        <aside class="sidebar-panel">
-          <div class="sidebar-head">
-            <h2>自选股 <span id="watchCount" class="tiny-meta"></span></h2>
-            <div class="watch-actions">
-              <button id="refreshBtn" class="ghost-btn icon-btn" title="刷新复盘">↻</button>
-              <button id="openOptionsBtn" class="ghost-btn icon-btn" title="规则设置">⚙</button>
-              <button id="openDashboardBtn" class="ghost-btn icon-btn" title="完整面板">▣</button>
-              <button id="openSearchBtn" class="solid-btn icon-btn" title="添加股票">＋</button>
+      <div class="main-columns">
+        <div class="left-col">
+          <header class="topbar">
+            <div class="title-wrap">
+              <h1>收盘复盘助手</h1>
+              <p id="headerStatus" class="header-status">复盘未生成 · 自动 15:10 / 16:15</p>
             </div>
-          </div>
-          <div id="watchlistCards" class="watchlist-cards"></div>
-        </aside>
+            <div class="topbar-actions">
+              <button id="openDashboardBtn" class="icon-btn" title="完整面板">
+                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+                  <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+                </svg>
+              </button>
+              <button id="refreshBtn" class="icon-btn icon-btn--primary" title="刷新复盘">
+                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/>
+                  <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/>
+                </svg>
+              </button>
+              <button id="openOptionsBtn" class="icon-btn" title="规则设置">
+                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="3"/>
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                </svg>
+              </button>
+            </div>
+          </header>
 
-        <section class="detail-panel collapsed">
-          <div class="detail-inner">
-            <div class="detail-head">
-              <div>
-                <div id="selectedTitle" class="detail-title">请选择一只股票</div>
-                <p id="selectedMeta" class="detail-meta">点击左侧股票查看 K 线与评分详情</p>
+          <section class="panel watch-panel">
+            <div class="section-head">
+              <h2>自选股</h2>
+              <div class="watch-actions">
+                <span id="watchCount" class="tiny-meta"></span>
+                <button id="sortBtn" class="ghost-btn sort-btn" title="排序">默认</button>
+                <button id="openSearchBtn" class="ghost-btn">添加股票</button>
               </div>
-              <div id="selectedScore" class="score-pill">--</div>
+            </div>
+            <div id="watchlistCards" class="watchlist-cards"></div>
+          </section>
+        </div>
+
+        <section class="panel detail-panel">
+          <div class="detail-drag-bar" id="detailDragBar"></div>
+          <div class="detail-head">
+            <div>
+              <h2 id="selectedTitle">请选择一只股票</h2>
+              <p id="selectedMeta" class="tiny-meta">K线、评分和规则命中会在这里一起显示</p>
+            </div>
+            <div class="detail-head-right">
+              <div id="selectedScore" class="score-pill">-- 分</div>
+              <button id="closeDetailBtn" class="close-detail-btn" title="关闭">×</button>
             </div>
           </div>
+
+          <div id="metricGrid" class="metric-grid"></div>
 
           <div class="chart-card">
-            <canvas id="detailCanvas" width="600" height="260"></canvas>
+            <canvas id="detailCanvas" width="432" height="160"></canvas>
           </div>
 
-          <div class="detail-inner">
-            <div id="metricGrid" class="metric-grid"></div>
-
-            <details class="rules-collapse">
-              <summary>规则详情</summary>
-              <div class="detail-bottom">
-                <article class="detail-list-card">
-                  <div class="section-head">
-                    <h3>加分项</h3>
-                    <span class="tiny-meta">命中规则</span>
-                  </div>
-                  <div id="matchedRules" class="rule-items"></div>
-                </article>
-
-                <article class="detail-list-card">
-                  <div class="section-head">
-                    <h3>减分项</h3>
-                    <span class="tiny-meta">未命中规则</span>
-                  </div>
-                  <div id="missedRules" class="rule-items"></div>
-                </article>
+          <div class="detail-bottom">
+            <article class="detail-list-card">
+              <div class="section-head">
+                <h3>加分项</h3>
+                <span class="tiny-meta">命中规则</span>
               </div>
-            </details>
+              <div id="matchedRules" class="rule-items"></div>
+            </article>
+
+            <article class="detail-list-card">
+              <div class="section-head">
+                <h3>减分项</h3>
+                <span class="tiny-meta">未命中规则</span>
+              </div>
+              <div id="missedRules" class="rule-items"></div>
+            </article>
           </div>
         </section>
       </div>

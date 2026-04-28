@@ -34,7 +34,7 @@ export const DEFAULT_SETTINGS = {
 export const CACHE_POLICY = {
   quoteTtlMs: 15 * 60 * 1000,
   quotePollingTtlMs: 15 * 60 * 1000,
-  quoteRealtimeTtlMs: 15 * 60 * 1000,
+  quoteRealtimeTtlMs: 2 * 60 * 1000,
   historyTtlMs: 6 * 60 * 60 * 1000,
   intradayTtlMs: 15 * 1000,
   reviewQuoteMaxAgeMs: 3 * 60 * 1000,
@@ -189,7 +189,7 @@ export const RULE_TYPES = [
   { value: "take_profit_hit", label: "触及止盈线" },
   { value: "stop_loss_hit", label: "触及止损线" },
   { value: "position_take_profit_or_stop_loss", label: "触及止盈或止损" },
-  { value: "close_above_open", label: "收盘价大于开盘价" },
+  { value: "close_above_open", label: "收盘价高于昨日收盘" },
   { value: "volume_up_vs_prev", label: "成交量高于前一日" },
   { value: "macd_golden_cross", label: "MACD 金叉" },
   { value: "macd_death_cross", label: "MACD 死叉" },
