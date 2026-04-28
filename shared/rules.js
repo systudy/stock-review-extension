@@ -71,25 +71,40 @@ function hasRecentGiantBearish(snapshot, lookback = 5, dropThreshold = 3, volume
   return false;
 }
 
-function isTrendUp(snapshot) {
+function linearRegression(closes) {
+  const n = closes.length;
+  if (n < 5) return { slopePct: 0, r2: 0 };
+
+  const meanX = (n - 1) / 2;
+  const meanY = closes.reduce((s, v) => s + v, 0) / n;
+  let num = 0, den = 0, ssTot = 0;
+  for (let i = 0; i < n; i++) {
+    num += (i - meanX) * (closes[i] - meanY);
+    den += (i - meanX) ** 2;
+    ssTot += (closes[i] - meanY) ** 2;
+  }
+  const slope = den === 0 ? 0 : num / den;
+  const slopePct = meanY === 0 ? 0 : (slope / meanY) * 100;
+
+  // R²：趋势的线性拟合优度，0~1，越高说明走势越线性
+  let ssRes = 0;
+  for (let i = 0; i < n; i++) {
+    const predicted = meanY + slope * (i - meanX);
+    ssRes += (closes[i] - predicted) ** 2;
+  }
+  const r2 = ssTot === 0 ? 0 : 1 - ssRes / ssTot;
+
+  return { slopePct, r2 };
+}
+
+function isTrendUp(snapshot, lookback = 20, minSlopePct = 0.05, minR2 = 0.3) {
   const history = Array.isArray(snapshot.history) ? snapshot.history : [];
-  const latest = history[history.length - 1];
-  const previous = history[history.length - 2];
-  if (!latest || !previous) {
-    return false;
-  }
+  const n = Math.min(lookback, history.length);
+  if (n < 5) return false;
 
-  const ma5 = Number(latest.ma5 || 0);
-  const ma10 = Number(latest.ma10 || 0);
-  const ma20 = Number(latest.ma20 || 0);
-  const prevMa10 = Number(previous.ma10 || 0);
-  const prevMa20 = Number(previous.ma20 || 0);
-
-  if (![ma5, ma10, ma20, prevMa10, prevMa20].every((value) => value > 0)) {
-    return false;
-  }
-
-  return ma5 >= ma10 && ma10 >= ma20 && ma10 >= prevMa10 && ma20 >= prevMa20;
+  const closes = history.slice(-n).map((c) => Number(c.close));
+  const { slopePct, r2 } = linearRegression(closes);
+  return slopePct >= minSlopePct && r2 >= minR2;
 }
 
 function isKdjNotDead(snapshot) {
@@ -207,11 +222,17 @@ export function evaluateRule(rule, snapshot) {
         matched: !hasRecentGiantBearish(snapshot, lookback, dropThreshold, volumeRatioThreshold),
         detail: `最近${lookback}日无巨量阴线 | 跌幅阈值 ${dropThreshold}% / 放量阈值 ${volumeRatioThreshold}倍`
       };
-    case "trend_up":
+    case "trend_up": {
+      const minSlopePct = Number(rule.params?.minSlopePct ?? 0.05);
+      const minR2 = Number(rule.params?.minR2 ?? 0.3);
+      const n = Math.min(lookback, snapshot.history?.length ?? 0);
+      const closes = (snapshot.history ?? []).slice(-n).map((c) => Number(c.close));
+      const { slopePct, r2 } = linearRegression(closes);
       return {
-        matched: isTrendUp(snapshot),
-        detail: `MA5 ${snapshot.latestCandle?.ma5 ?? "--"} / MA10 ${snapshot.latestCandle?.ma10 ?? "--"} / MA20 ${snapshot.latestCandle?.ma20 ?? "--"}`
+        matched: isTrendUp(snapshot, lookback, minSlopePct, minR2),
+        detail: `近${n}日斜率 ${slopePct >= 0 ? "+" : ""}${slopePct.toFixed(3)}%/日 · R² ${r2.toFixed(2)}`
       };
+    }
     case "kdj_not_dead_cross":
       return {
         matched: isKdjNotDead(snapshot),

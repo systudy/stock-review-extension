@@ -163,7 +163,7 @@ export const DEFAULT_SCORE_RULES = [
     type: "trend_up",
     enabled: true,
     points: 1,
-    params: {}
+    params: { lookback: 20, minSlopePct: 0.05, minR2: 0.3 }
   },
   {
     id: "score-kdj",
@@ -194,7 +194,7 @@ export const RULE_TYPES = [
   { value: "macd_golden_cross", label: "MACD 金叉" },
   { value: "macd_death_cross", label: "MACD 死叉" },
   { value: "no_giant_bearish_candle", label: "最近无巨量阴线" },
-  { value: "trend_up", label: "均线趋势向上" },
+  { value: "trend_up", label: "收盘价趋势向上（线性回归）" },
   { value: "kdj_not_dead_cross", label: "KDJ 未死叉" }
 ];
 
