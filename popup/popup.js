@@ -154,7 +154,6 @@ async function render() {
   if (!bootstrappedRefresh) {
     bootstrappedRefresh = true;
     ensureDefaults().catch(() => {});
-    loadStockUniverse().catch(() => {});
     chrome.runtime
       .sendMessage({ type: "soft-refresh" })
       .then(() => chrome.runtime.sendMessage({ type: "run-review-cached" }))

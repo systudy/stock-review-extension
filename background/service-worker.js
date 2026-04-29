@@ -29,7 +29,6 @@ let refreshTask = null;
 chrome.runtime.onInstalled.addListener(async () => {
   await ensureDefaults();
   await scheduleAlarms();
-  await refreshAndEvaluate("install");
 });
 
 chrome.runtime.onStartup.addListener(async () => {
@@ -84,6 +83,8 @@ async function handleRuntimeMessage(message) {
       return refreshAndEvaluate("foreground", { forceQuotes: true, sourceLabel: "popup-open" });
     case "run-review":
       return runDailyReviewReminder(true);
+    case "run-review-cached":
+      return runDailyReviewFromCache();
     case "get-stock-history":
       return fetchEastMoneyHistory(message.code, message.market, message.limit || 120);
     case "realtime-refresh": {
@@ -320,4 +321,24 @@ function getNextDailyTime(date) {
   return date.getTime() > Date.now()
     ? date
     : new Date(date.getTime() + 24 * 60 * 60 * 1000);
+}
+
+async function runDailyReviewFromCache() {
+  const state = await getState();
+  if (!state.watchlist.length) {
+    return { skipped: true, reason: "watchlist-empty" };
+  }
+
+  const snapshots = state.watchlist.map((stock) =>
+    deriveStockSnapshot(stock, state.marketCache.quotes, state.marketCache.histories)
+  );
+
+  const scoreResults = evaluateScores(state.scoreRules, snapshots);
+  const report = buildDailyReport(scoreResults, snapshots, state.scoreRules);
+  const reports = {
+    latest: report,
+    history: [report, ...(state.reports?.history || [])].slice(0, 30)
+  };
+  await saveReports(reports);
+  return report;
 }
