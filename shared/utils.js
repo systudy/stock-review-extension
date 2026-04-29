@@ -1,5 +1,6 @@
 export function formatStockCode(input) {
-  return String(input || "").trim().replace(/[^0-9]/g, "").slice(0, 6);
+  if (input === null || input === undefined) return "";
+  return String(input).trim().replace(/[^0-9]/g, "").slice(0, 6);
 }
 
 export function inferMarket(code) {
